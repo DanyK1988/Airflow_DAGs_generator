@@ -55,7 +55,7 @@ Schedule is extracted from the script using a comment:
 
 -- schedule: @daily  
 
-# schedule: 0 2 * * *  
+schedule: 0 2 * * *  
 
 
 🛠 Requirements
