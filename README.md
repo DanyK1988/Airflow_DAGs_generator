@@ -23,13 +23,20 @@ This project is designed for local usage with Docker-based Airflow setups (no cl
  - No credentials stored inside DAGs (uses Airflow connections)
  - Docker-friendly
 
- 📁 Project Structure
- .
-├── scripts/        # Input Python / SQL files
-├── templates/      # Jinja2 DAG templates
-├── dags/           # Generated Airflow DAGs
-├── generator.py    # Main generator script
-└── README.md
+ 📁 Project Structure  
+ 
+ .  
+ 
+├── scripts/        # Input Python / SQL files  
+
+├── templates/      # Jinja2 DAG templates  
+
+├── dags/           # Generated Airflow DAGs  
+
+├── generator.py    # Main generator script  
+
+└── README.md  
+
 
 🧠 How It Works
 Python scripts
@@ -42,10 +49,14 @@ Each .sql file becomes one DAG
 SQL is split into blocks based on DDL / statements
 Each block becomes a separate task
 
-⏰ Scheduling
-Schedule is extracted from the script using a comment:
--- schedule: @daily
-# schedule: 0 2 * * *
+⏰ Scheduling  
+
+Schedule is extracted from the script using a comment:  
+
+-- schedule: @daily  
+
+# schedule: 0 2 * * *  
+
 
 🛠 Requirements
 Python 3.9+
