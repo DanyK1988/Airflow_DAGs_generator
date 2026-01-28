@@ -1,0 +1,31 @@
+from airflow import DAG
+from airflow.operators.python import PythonOperator
+from airflow.providers.postgres.hooks.postgres import PostgresHook
+import pendulum
+
+
+def run_sql_block(sql):
+    hook = PostgresHook(postgres_conn_id="pg_extra_conn")
+    hook.run(sql)
+
+
+with DAG(
+    dag_id="{{ dag_id }}",
+    start_date=pendulum.parse("{{ start_date }}"),
+    schedule_interval="{{ schedule }}",
+    catchup=False,
+    tags=["sql-auto"]
+) as dag:
+
+{% for block in sql_blocks %}
+    sql_task_{{ loop.index }} = PythonOperator(
+        task_id="sql_task_{{ loop.index }}",
+        python_callable=run_sql_block,
+        op_args=["""{{ block }}"""],
+    )
+
+{% endfor %}
+
+{% for i in range(sql_blocks|length -1) %}
+    sql_task_{{ i+1 }} >> sql_task_{{ i+2 }}
+{% endfor %}
