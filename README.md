@@ -1,28 +1,22 @@
-# Airflow_DAGs_generator
-Built automatic DAG generator for Airflow supporting Python &amp; SQL, task extraction, scheduling, and template-based DAG creation.
+# Airflow DAGs generator (Python/SQL → Airflow DAG)
 
-🚀 Airflow DAG Auto Generator
-A local tool for automatic generation of Apache Airflow DAGs from Python and SQL source files.
-The generator scans a folder with scripts and produces ready-to-run DAGs using Jinja2 templates.
-Each source file becomes a single DAG, and internal logic is automatically split into multiple Airflow tasks.
-This project is designed for local usage with Docker-based Airflow setups (no cluster required).  
+Локальный генератор, который берет набор исходных скриптов (`.py` и `.sql`) и автоматически создает готовые DAG’и для Apache Airflow на основе Jinja2-шаблонов.
 
-✨ Features
- - Supports Python and SQL scripts 
+Идея простая: вы складываете «сырой» код в папку `scripts/`, запускаете `generator.py`, а на выходе получаете Python-файлы DAG’ов в `dags/`. Один входной файл = один DAG. Внутри DAG генератор пытается «разбить» исходник на несколько задач (tasks) и проставить зависимости последовательно.
 
- - Automatically generates one DAG per source file  
+## Что умеет
 
- Task splitting:
- - Python → one task per def function
- - SQL → one task per statement / DDL block (CREATE, DROP, ALTER, TRUNCATE)
- - Schedule extracted directly from source code
- - DAG start date = generation date
- - Jinja2-based templating
- - Automatic task dependencies
- - Prevents duplicate processing by marking scripts as .processed
- - No credentials stored inside DAGs (uses Airflow connections)
- - Docker-friendly
+- **1 DAG на 1 файл**: для каждого `scripts/*.py` или `scripts/*.sql` создается DAG.
+- **Авто-разбиение на tasks**:
+  - **Python**: 1 task на каждую функцию `def ...` верхнего уровня.
+  - **SQL**: 1 task на каждый блок SQL, который начинается с ключевого слова из списка: `CREATE`, `DROP`, `ALTER`, `TRUNCATE`, `INSERT`, `UPDATE`, `DELETE`, `SELECT`.
+- **Авто-зависимости**: задачи выстраиваются в цепочку в порядке обнаружения (A >> B >> C).
+- **Расписание из исходника**: cron / preset (`@daily`, `@once`, …) берется из комментария `schedule: ...` в начале скрипта.
+- **Шаблонизация**: DAG’и рендерятся из `templates/*.j2`.
+- **Защита от повторной генерации**: обработанные скрипты переименовываются в `*.processed` и при следующем запуске пропускаются.
+- **Docker-friendly**: рассчитан на локальную разработку/демо (часто вместе с docker-compose Airflow).
 
+<<<<<<< HEAD
  📁 Project Structure  
  
  .  
@@ -37,18 +31,23 @@ This project is designed for local usage with Docker-based Airflow setups (no cl
 
 └── README.md  
 
+=======
+## Структура проекта
+>>>>>>> a0c8a97 (Обновление Readme файла)
 
-🧠 How It Works
-Python scripts
-Each .py file becomes one DAG
-Every def function becomes a separate Airflow task
-Tasks are chained in definition order
+```text
+.
+├── generator.py          # основной генератор
+├── scripts/              # входные .py / .sql файлы
+├── templates/            # Jinja2-шаблоны для DAG’ов
+│   ├── python_template.j2
+│   └── sql_template.j2
+└── dags/                 # выходные DAG’и (создаётся автоматически)
+```
 
-SQL scripts
-Each .sql file becomes one DAG
-SQL is split into blocks based on DDL / statements
-Each block becomes a separate task
+## Как работает генерация
 
+<<<<<<< HEAD
 ⏰ Scheduling  
 
 Schedule is extracted from the script using a comment:  
@@ -57,16 +56,99 @@ Schedule is extracted from the script using a comment:
 
 schedule: 0 2 * * *  
 
+=======
+### Python → DAG
+>>>>>>> a0c8a97 (Обновление Readme файла)
 
-🛠 Requirements
-Python 3.9+
-Apache Airflow
-Jinja2
+- Генератор парсит файл через `ast` и вытягивает имена функций верхнего уровня (`def name(): ...`).
+- Эти функции становятся `PythonOperator`-задачами, связанными последовательно.
+- Исходный Python-код **вставляется в DAG-файл целиком** (как есть), чтобы функции были доступны для `python_callable`.
 
-🎯 Use Cases
- - Rapid DAG prototyping
- - SQL → Airflow migration
- - Automating legacy scripts
- - Analytics / Data Engineering pipelines
- - Educational Airflow projects
+Важно: **не кладите исполняемый код на верхнем уровне** (print/циклы/запросы и т.д.). Такой код выполнится при импорте DAG’а планировщиком Airflow, что почти всегда нежелательно. Заворачивайте логику в функции.
+
+### SQL → DAG
+
+- Генератор делит `.sql` на блоки по строкам, которые начинаются с ключевых слов (`CREATE/INSERT/SELECT/...`).
+- Каждый блок запускается отдельным `PythonOperator`, который вызывает `PostgresHook.run(sql)`.
+- Все блоки соединяются в цепочку выполнения.
+
+## Расписание (schedule)
+
+В любом скрипте можно указать расписание одной строкой-комментарием:
+
+- Python:
+
+```python
+# schedule: 0 9 * * *
+```
+
+- SQL:
+
+```sql
+-- schedule: */5 * * * *
+```
+
+Технические детали:
+- Генератор ищет текст по шаблону `schedule:\s*(.+)`; если не нашел — ставит `@daily`.
+- Для `.sql` строка `-- schedule: ...` удаляется из SQL перед созданием задач (чтобы не отправлять ее в базу).
+
+## Имена DAG’ов и файлов на выходе
+
+- **DAG id**: `generated_<тип>_<имя_файла>`, например:
+  - `scripts/math_dag.py` → `generated_py_math_dag`
+  - `scripts/user_demo.sql` → `generated_sql_user_demo`
+- **Путь на выходе**: `dags/<dag_id>.py`
+- **start_date**: ставится в дату генерации (сегодняшний день) и парсится через `pendulum.parse(...)`.
+
+## Требования
+
+Минимально нужны:
+- Python 3.9+
+- `jinja2`
+
+Чтобы сгенерированные DAG’и работали в Airflow, в окружении Airflow должны быть:
+- Apache Airflow
+- `pendulum`
+- провайдер Postgres (для SQL DAG’ов): `apache-airflow-providers-postgres`
+
+## Быстрый старт
+
+1) Положите ваши файлы в `scripts/`:
+- `.py` (желательно: только `def ...`, без исполняемого кода наверху)
+- `.sql`
+
+2) Запустите генератор из корня репозитория:
+
+```bash
+python3 generator.py
+```
+
+3) Заберите результат:
+- DAG’и появятся в `dags/`
+- обработанные исходники в `scripts/` будут переименованы в `*.processed`
+
+Если хотите перегенерировать DAG для файла, просто переименуйте обратно, например:
+`something.py.processed` → `something.py`
+
+## Настройка подключения к Postgres (для SQL DAG’ов)
+
+Шаблон `templates/sql_template.j2` использует Airflow Connection:
+
+- `postgres_conn_id="pg_extra_conn"`
+
+Поэтому в Airflow нужно создать connection с **Conn Id = `pg_extra_conn`** (через UI или переменные окружения/секреты) и корректными параметрами хоста/порта/логина/пароля/БД.
+
+Если у вас другое имя коннекта, измените его в `templates/sql_template.j2`.
+
+## Ограничения и нюансы
+
+- **Python-скрипты без `def`**: генератор создаст DAG без задач (потому что нечего превращать в `PythonOperator`). Плюс top-level код может выполниться при импорте DAG’а — лучше всегда использовать функции.
+- **SQL разбиение**: деление на блоки основано на строках, начинающихся с ключевых слов. Если запросы форматированы необычно (например, пробелы перед `SELECT` или ключевое слово не в начале строки), блок может не отделиться как ожидалось.
+- **Зависимости**: сейчас все задачи связываются строго последовательно. Параллелизм/ветвления не строятся.
+
+## Типичные кейсы
+
+- Быстро превратить набор legacy SQL/Python-скриптов в DAG’и для демо/прототипа.
+- Упростить миграцию «SQL-джобов» в Airflow.
+- Учебные проекты по Airflow и автоматизации пайплайнов.
 
